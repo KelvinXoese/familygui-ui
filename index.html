@@ -7,25 +7,54 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="card">
-        <h1>Kelvin Amenumey Agbemor</h1>
-     <p>FamilyGuy is an app that connects family together and makes everyone feel safe and happy</p>
-     <ol>
-        <li>Agbesi Amenumey</li>
-        <li>Derrick Kulego</li>
-        <li>Martha Dapaah</li>
-     </ol>
-      <button>Join Family</button>
-     <div>
-       <label for="familyCode">Enter family code</label>
-       <input type="text" id="familyCode" placeholder="family code">
 
-      </div>
-  </div>
-    
-    
-    
+    <div class="app">
 
-    
+        <!-- HEADER -->
+        <header class="header">
+            <h2 class="logo">FamilyGuy</h2>
+            <button class="btn-outline">Logout</button>
+        </header>
+
+        <!-- MAIN CARD -->
+        <div class="card">
+
+            <!-- PROFILE SECTION -->
+            <div class="profile">
+                <div class="avatar">KA</div>
+                <div class="profile-info">
+                    <h1>Kelvin Amenumey Agbemor</h1>
+                    <p>FamilyGuy connects families and makes everyone feel safe and happy.</p>
+                </div>
+            </div>
+
+            <!-- DIVIDER -->
+            <hr class="divider">
+
+            <!-- MEMBERS SECTION -->
+            <div class="section">
+                <h3 class="section-title">Family Members</h3>
+                <div class="members">
+                    <span class="badge">Agbesi Amenumey</span>
+                    <span class="badge">Derrick Kulego</span>
+                    <span class="badge">Martha Dapaah</span>
+                </div>
+            </div>
+
+            <!-- DIVIDER -->
+            <hr class="divider">
+
+            <!-- JOIN SECTION -->
+            <div class="section">
+                <h3 class="section-title">Join a Family</h3>
+                <div class="join-row">
+                    <input type="text" id="familyCode" placeholder="Enter family code">
+                    <button class="btn-primary">Join Family</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
 </body>
 </html>
