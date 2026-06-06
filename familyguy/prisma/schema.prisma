@@ -1,0 +1,603 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+  
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+  APPLE
+}
+
+enum FamilyMemberRole {
+  FAMILY_HEAD
+  ELDER
+  TREASURER
+  SECRETARY
+  MEMBER
+}
+
+enum MemberStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+}
+
+enum MeetingType {
+  PHYSICAL
+  VIRTUAL
+}
+
+enum MeetingStatus {
+  UPCOMING
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  CONFIRMED
+  DECLINED
+  MAYBE
+}
+
+enum DueType {
+  MONTHLY
+  ONE_TIME
+  WELFARE
+}
+
+enum DueStatus {
+  ACTIVE
+  CLOSED
+}
+
+enum PaymentStatus {
+  PAID
+  PARTIAL
+  PENDING
+}
+
+enum PaymentMethod {
+  MOBILE_MONEY
+  BANK_TRANSFER
+  CASH
+}
+
+enum EventType {
+  REUNION
+  BIRTHDAY
+  FUNERAL
+  GATHERING
+  OTHER
+}
+
+enum EventStatus {
+  UPCOMING
+  PAST
+  CANCELLED
+}
+
+enum EventAttendanceStatus {
+  ATTENDING
+  NOT_ATTENDING
+  MAYBE
+}
+
+enum FileType {
+  MINUTES
+  FINANCIAL
+  GALLERY
+  VIDEO
+  DOCUMENT
+}
+
+enum NotificationType {
+  BIRTHDAY
+  DUES
+  MEETING
+  ANNOUNCEMENT
+  PROFILE_NUDGE
+  TREE_NUDGE
+  GENERAL
+}
+
+enum OtpType {
+  EMAIL_VERIFY
+  PHONE_VERIFY
+  PASSWORD_RESET
+}
+
+enum ParentStatus {
+  LIVING
+  DECEASED
+}
+
+// ============================================
+// USERS & AUTH
+// ============================================
+
+model User {
+  id            String       @id @default(cuid())
+  firstName     String
+  lastName      String
+  email         String       @unique
+  phone         String?      @unique
+  passwordHash  String?
+  avatarUrl     String?
+  dateOfBirth   DateTime?
+  gender        String?
+  authProvider  AuthProvider @default(EMAIL)
+  isVerified    Boolean      @default(false)
+  deletedAt     DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  // Relations
+  familyMembers        FamilyMember[]
+  familiesCreated      Family[]              @relation("FamilyCreator")
+  memberProfile        MemberProfile?
+  treeProfiles         FamilyTreeProfile[]
+  treeChildren         FamilyTreeChild[]     @relation("ParentUser")
+  treeChildEntries     FamilyTreeChild[]     @relation("ChildUser")
+  announcements        Announcement[]
+  announcementReactions AnnouncementReaction[]
+  announcementComments  AnnouncementComment[]
+  meetingsCreated      Meeting[]             @relation("MeetingCreator")
+  meetingAttendances   MeetingAttendance[]
+  duesCreated          Due[]                 @relation("DueCreator")
+  duePayments          DuePayment[]          @relation("DuePayer")
+  duePaymentsRecorded  DuePayment[]          @relation("DueRecorder")
+  eventsCreated        Event[]               @relation("EventCreator")
+  eventAttendances     EventAttendance[]
+  eventGalleries       EventGallery[]
+  archiveDocuments     ArchiveDocument[]
+  notifications        Notification[]
+  otpCodes             OtpCode[]
+  sessions             Session[]
+  refreshTokens        RefreshToken[]
+  invitedMembers       FamilyMember[]        @relation("MemberInviter")
+
+  @@index([email])
+  @@index([phone])
+  @@map("users")
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  userId     String
+  token      String   @unique
+  deviceInfo String?
+  ipAddress  String?
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("sessions")
+}
+
+model RefreshToken {
+  id         String   @id @default(cuid())
+  userId     String
+  token      String   @unique
+  expiresAt  DateTime
+  isRevoked  Boolean  @default(false)
+  deviceInfo String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  userId    String
+  code      String
+  type      OtpType
+  expiresAt DateTime
+  isUsed    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("otp_codes")
+}
+
+// ============================================
+// FAMILY CORE
+// ============================================
+
+model Family {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  motto         String?
+  origin        String?
+  coverPhotoUrl String?
+  inviteCode    String   @unique
+  createdById   String
+  deletedAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  createdBy        User                @relation("FamilyCreator", fields: [createdById], references: [id])
+  members          FamilyMember[]
+  treeProfiles     FamilyTreeProfile[]
+  treeChildren     FamilyTreeChild[]
+  announcements    Announcement[]
+  meetings         Meeting[]
+  dues             Due[]
+  events           Event[]
+  archiveDocuments ArchiveDocument[]
+  notifications    Notification[]
+
+  @@index([inviteCode])
+  @@map("families")
+}
+
+model FamilyMember {
+  id         String           @id @default(cuid())
+  familyId   String
+  userId     String
+  role       FamilyMemberRole @default(MEMBER)
+  status     MemberStatus     @default(ACTIVE)
+  joinedAt   DateTime         @default(now())
+  invitedById String?
+  deletedAt  DateTime?
+
+  family    Family  @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy User?   @relation("MemberInviter", fields: [invitedById], references: [id])
+
+  @@unique([familyId, userId])
+  @@index([familyId])
+  @@index([userId])
+  @@map("family_members")
+}
+
+// ============================================
+// PROFILES
+// ============================================
+
+model MemberProfile {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique
+  occupation              String?
+  employer                String?
+  education               String?
+  fieldOfStudy            String?
+  hometown                String?
+  placeOfBirth            String?
+  currentLocation         String?
+  hobbies                 String?
+  achievement             String?
+  awards                  String?
+  communityInvolvement    String?
+  bio                     String?
+  messageToFamily         String?
+  completionPercentage    Int      @default(0)
+  workEducationCompleted  Boolean  @default(false)
+  personalCompleted       Boolean  @default(false)
+  achievementsCompleted   Boolean  @default(false)
+  messageCompleted        Boolean  @default(false)
+  lastNudgedAt            DateTime?
+  updatedAt               DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("member_profiles")
+}
+
+model FamilyTreeProfile {
+  id             String       @id @default(cuid())
+  userId         String
+  familyId       String
+  parentUserId   String?
+  parentName     String?
+  parentStatus   ParentStatus?
+  isConfirmed    Boolean      @default(false)
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, familyId])
+  @@index([userId])
+  @@index([familyId])
+  @@map("family_tree_profiles")
+}
+
+model FamilyTreeChild {
+  id            String   @id @default(cuid())
+  parentUserId  String
+  childUserId   String?
+  childName     String?
+  familyId      String
+  isConfirmed   Boolean  @default(false)
+  deletedAt     DateTime?
+  createdAt     DateTime @default(now())
+
+  parentUser User    @relation("ParentUser", fields: [parentUserId], references: [id], onDelete: Cascade)
+  childUser  User?   @relation("ChildUser", fields: [childUserId], references: [id])
+  family     Family  @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@index([parentUserId])
+  @@index([familyId])
+  @@map("family_tree_children")
+}
+
+// ============================================
+// ANNOUNCEMENTS
+// ============================================
+
+model Announcement {
+  id        String   @id @default(cuid())
+  familyId  String
+  authorId  String
+  title     String
+  body      String
+  isPinned  Boolean  @default(false)
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  family   Family                 @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  author   User                   @relation(fields: [authorId], references: [id])
+  reactions AnnouncementReaction[]
+  comments  AnnouncementComment[]
+
+  @@index([familyId])
+  @@index([authorId])
+  @@map("announcements")
+}
+
+model AnnouncementReaction {
+  id             String   @id @default(cuid())
+  announcementId String
+  userId         String
+  type           String   @default("like")
+  createdAt      DateTime @default(now())
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, userId])
+  @@index([announcementId])
+  @@map("announcement_reactions")
+}
+
+model AnnouncementComment {
+  id             String   @id @default(cuid())
+  announcementId String
+  authorId       String
+  body           String
+  deletedAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  author       User         @relation(fields: [authorId], references: [id])
+
+  @@index([announcementId])
+  @@map("announcement_comments")
+}
+
+// ============================================
+// MEETINGS
+// ============================================
+
+model Meeting {
+  id          String        @id @default(cuid())
+  familyId    String
+  createdById String
+  title       String
+  date        DateTime
+  startTime   String
+  endTime     String
+  type        MeetingType
+  location    String
+  agenda      Json          @default("[]")
+  status      MeetingStatus @default(UPCOMING)
+  minutesUrl  String?
+  deletedAt   DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  family     Family              @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  createdBy  User                @relation("MeetingCreator", fields: [createdById], references: [id])
+  attendances MeetingAttendance[]
+
+  @@index([familyId])
+  @@map("meetings")
+}
+
+model MeetingAttendance {
+  id          String           @id @default(cuid())
+  meetingId   String
+  userId      String
+  status      AttendanceStatus
+  respondedAt DateTime         @default(now())
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, userId])
+  @@index([meetingId])
+  @@map("meeting_attendance")
+}
+
+// ============================================
+// DUES
+// ============================================
+
+model Due {
+  id          String    @id @default(cuid())
+  familyId    String
+  createdById String
+  title       String
+  description String?
+  amount      Float
+  currency    String    @default("GHS")
+  deadline    DateTime
+  type        DueType
+  status      DueStatus @default(ACTIVE)
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  family    Family       @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  createdBy User         @relation("DueCreator", fields: [createdById], references: [id])
+  payments  DuePayment[]
+
+  @@index([familyId])
+  @@map("dues")
+}
+
+model DuePayment {
+  id            String        @id @default(cuid())
+  dueId         String
+  userId        String
+  amountPaid    Float
+  paymentStatus PaymentStatus @default(PENDING)
+  paymentMethod PaymentMethod?
+  paidAt        DateTime?
+  proofUrl      String?
+  recordedById  String?
+  deletedAt     DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  due        Due   @relation(fields: [dueId], references: [id], onDelete: Cascade)
+  user       User  @relation("DuePayer", fields: [userId], references: [id])
+  recordedBy User? @relation("DueRecorder", fields: [recordedById], references: [id])
+
+  @@unique([dueId, userId])
+  @@index([dueId])
+  @@index([userId])
+  @@map("due_payments")
+}
+
+// ============================================
+// EVENTS
+// ============================================
+
+model Event {
+  id          String      @id @default(cuid())
+  familyId    String
+  createdById String
+  title       String
+  description String?
+  date        DateTime
+  time        String
+  location    String
+  type        EventType
+  status      EventStatus @default(UPCOMING)
+  deletedAt   DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  family      Family            @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  createdBy   User              @relation("EventCreator", fields: [createdById], references: [id])
+  attendances EventAttendance[]
+  gallery     EventGallery[]
+
+  @@index([familyId])
+  @@map("events")
+}
+
+model EventAttendance {
+  id          String                @id @default(cuid())
+  eventId     String
+  userId      String
+  status      EventAttendanceStatus
+  respondedAt DateTime              @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@map("event_attendance")
+}
+
+model EventGallery {
+  id          String   @id @default(cuid())
+  eventId     String
+  uploadedById String
+  fileUrl     String
+  fileType    String
+  caption     String?
+  deletedAt   DateTime?
+  uploadedAt  DateTime @default(now())
+
+  event      Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  uploadedBy User  @relation(fields: [uploadedById], references: [id])
+
+  @@index([eventId])
+  @@map("event_gallery")
+}
+
+// ============================================
+// ARCHIVE
+// ============================================
+
+model ArchiveDocument {
+  id          String   @id @default(cuid())
+  familyId    String
+  uploadedById String
+  title       String
+  fileUrl     String
+  fileType    FileType
+  fileSize    String?
+  year        Int
+  deletedAt   DateTime?
+  createdAt   DateTime @default(now())
+
+  family     Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  uploadedBy User   @relation(fields: [uploadedById], references: [id])
+
+  @@index([familyId])
+  @@map("archive_documents")
+}
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  familyId  String?
+  title     String
+  body      String
+  type      NotificationType
+  isRead    Boolean          @default(false)
+  link      String?
+  createdAt DateTime         @default(now())
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  family Family? @relation(fields: [familyId], references: [id])
+
+  @@index([userId, isRead])
+  @@index([userId])
+  @@map("notifications")
+}
