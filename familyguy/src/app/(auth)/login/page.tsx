@@ -32,7 +32,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/dashboard");
+      router.push("/onboarding");
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
