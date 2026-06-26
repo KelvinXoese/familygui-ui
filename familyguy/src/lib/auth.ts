@@ -34,8 +34,8 @@ export function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-export function generateInviteCode(familyName: string): string {
-  const prefix = familyName.slice(0, 3).toUpperCase();
-  const random = Math.floor(10000 + Math.random() * 90000);
-  return `${prefix}-${random}`;
+export function generateInviteCode(name: string): string {
+  const prefix = name.slice(0, 3).toUpperCase().replace(/[^A-Z]/g, "X");
+  const suffix = Math.random().toString(36).substring(2, 7).toUpperCase();
+  return `${prefix}-${suffix}`;
 }

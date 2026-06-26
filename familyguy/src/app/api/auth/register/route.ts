@@ -7,12 +7,14 @@ import { AuthProvider } from "@prisma/client";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    
 
     // Validate input
     const validation = registerSchema.safeParse(body);
     if (!validation.success) {
-      return errorResponse(validation.error.errors[0].message, 400);
-    }
+  const msg = validation.error?.errors?.[0]?.message ?? "Invalid input";
+  return errorResponse(msg, 400);
+}
 
     const { firstName, lastName, email, phone, password } = validation.data;
 
