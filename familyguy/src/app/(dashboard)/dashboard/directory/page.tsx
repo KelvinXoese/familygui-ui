@@ -1,94 +1,109 @@
-export default function DirectoryPage() {
-  const members = [
-    { name: "Kelvin Amenumey Agbemor", role: "Family Head", phone: "+233 24 123 4567", email: "kelvin@email.com", location: "Accra, Ghana", initials: "KA", color: "bg-indigo-600" },
-    { name: "Agbesi Amenumey", role: "Elder", phone: "+233 20 987 6543", email: "agbesi@email.com", location: "Ho, Ghana", initials: "AA", color: "bg-purple-500" },
-    { name: "Kofi Amenumey", role: "Elder", phone: "+233 24 111 2222", email: "kofi@email.com", location: "Accra, Ghana", initials: "KA", color: "bg-indigo-500" },
-    { name: "Ama Kulego", role: "Treasurer", phone: "+233 20 333 4444", email: "ama@email.com", location: "Accra, Ghana", initials: "AK", color: "bg-teal-500" },
-    { name: "Yaw Dapaah", role: "Secretary", phone: "+233 55 555 6666", email: "yaw@email.com", location: "London, UK", initials: "YD", color: "bg-rose-500" },
-    { name: "Derrick Kulego", role: "Member", phone: "+233 55 456 7890", email: "derrick@email.com", location: "Kumasi, Ghana", initials: "DK", color: "bg-amber-500" },
-    { name: "Martha Dapaah", role: "Member", phone: "+233 27 321 0987", email: "martha@email.com", location: "Takoradi, Ghana", initials: "MD", color: "bg-green-500" },
-    { name: "Abena Mensah", role: "Member", phone: "+233 27 777 8888", email: "abena@email.com", location: "Accra, Ghana", initials: "AM", color: "bg-pink-500" },
-  ];
+"use client";
+import { useState, useEffect } from "react";
 
-  const grouped = members.reduce((acc, member) => {
-    const letter = member.name[0];
+type Member = { id: string; role: string; user: { firstName: string; lastName: string; email: string; phone?: string; memberProfile?: { currentLocation?: string; occupation?: string } } };
+const colors = ["bg-indigo-500","bg-purple-500","bg-rose-500","bg-amber-500","bg-green-500","bg-teal-500","bg-pink-500","bg-orange-500"];
+const roleLabel: Record<string,string> = { FAMILY_HEAD:"Family Head",ELDER:"Elder",TREASURER:"Treasurer",SECRETARY:"Secretary",HISTORIAN:"Historian",EVENT_COORDINATOR:"Event Coordinator",MEMBER:"Member" };
+
+export default function DirectoryPage() {
+  const [members, setMembers] = useState<Member[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    const familyId = localStorage.getItem("active_family_id");
+    if (!familyId) { setLoading(false); return; }
+    fetch(`/api/families/members?familyId=${familyId}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.success) setMembers(d.data.members); })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = members.filter((m) => {
+    const q = search.toLowerCase();
+    const name = `${m.user.firstName} ${m.user.lastName}`.toLowerCase();
+    return name.includes(q) || (m.user.memberProfile?.occupation || "").toLowerCase().includes(q) || (m.user.memberProfile?.currentLocation || "").toLowerCase().includes(q);
+  });
+
+  const grouped = filtered.reduce((acc, m, i) => {
+    const letter = m.user.firstName[0].toUpperCase();
     if (!acc[letter]) acc[letter] = [];
-    acc[letter].push(member);
+    acc[letter].push({ ...m, colorIndex: i });
     return acc;
-  }, {} as Record<string, typeof members>);
+  }, {} as Record<string, (Member & { colorIndex: number })[]>);
 
   return (
     <div>
-      {/* HEADER */}
       <div className="flex items-center justify-between mb-8">
         <div>
           <h2 className="text-2xl font-bold text-gray-800">Directory 🔍</h2>
-          <p className="text-gray-500 text-sm mt-1">Contact information for all family members</p>
+          <p className="text-gray-500 text-sm mt-1">Find any family member by name, occupation or location</p>
         </div>
       </div>
-
-      {/* SEARCH */}
       <div className="relative mb-6">
         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
-        <input
-          type="text"
-          placeholder="Search by name, location or role..."
-          className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition"
-        />
+        <input type="text" placeholder="Search by name, occupation or location..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition" />
       </div>
 
-      {/* ALPHABET INDEX */}
-      <div className="flex flex-wrap gap-2 mb-6">
-        {Object.keys(grouped).sort().map((letter) => (
-          <button key={letter} className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 text-sm font-bold hover:bg-indigo-100 transition">
-            {letter}
-          </button>
-        ))}
-      </div>
-
-      {/* MEMBERS BY LETTER */}
-      <div className="space-y-6">
-        {Object.keys(grouped).sort().map((letter) => (
-          <div key={letter}>
-            <div className="flex items-center gap-3 mb-3">
-              <span className="text-lg font-black text-indigo-600">{letter}</span>
-              <div className="flex-1 h-px bg-gray-100" />
-            </div>
-            <div className="space-y-3">
-              {grouped[letter].map((member) => (
-                <div key={member.name} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-12 h-12 rounded-full ${member.color} flex items-center justify-center text-white text-sm font-bold flex-shrink-0`}>
-                      {member.initials}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="text-sm font-bold text-gray-800">{member.name}</p>
-                        <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-lg font-semibold flex-shrink-0">
-                          {member.role}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-1 gap-0.5 md:grid-cols-3">
-                        <p className="text-xs text-gray-400">📞 {member.phone}</p>
-                        <p className="text-xs text-gray-400">✉️ {member.email}</p>
-                        <p className="text-xs text-gray-400">📍 {member.location}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <button className="w-9 h-9 rounded-xl bg-green-50 hover:bg-green-100 text-green-600 text-sm flex items-center justify-center transition">
-                        📞
-                      </button>
-                      <button className="w-9 h-9 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-sm flex items-center justify-center transition">
-                        ✉️
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+      {loading ? (
+        <div className="flex items-center justify-center h-48"><div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" /></div>
+      ) : members.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center shadow-sm">
+          <span className="text-4xl block mb-4">🔍</span>
+          <h3 className="text-lg font-bold text-gray-700 mb-2">No members yet</h3>
+          <p className="text-sm text-gray-400 mb-4">The directory will fill up as family members join</p>
+          <a href="/dashboard/members" className="px-5 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 transition inline-block">Invite Members →</a>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center shadow-sm">
+          <span className="text-4xl block mb-4">🔍</span>
+          <h3 className="text-lg font-bold text-gray-700 mb-2">No results for "{search}"</h3>
+          <p className="text-sm text-gray-400">Try searching by name, occupation, or location</p>
+        </div>
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-2 mb-6">
+            {Object.keys(grouped).sort().map((letter) => (
+              <a key={letter} href={`#dir-${letter}`} className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 text-sm font-bold hover:bg-indigo-100 transition flex items-center justify-center">{letter}</a>
+            ))}
           </div>
-        ))}
-      </div>
+          <div className="space-y-6">
+            {Object.keys(grouped).sort().map((letter) => (
+              <div key={letter} id={`dir-${letter}`}>
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-lg font-black text-indigo-600">{letter}</span>
+                  <div className="flex-1 h-px bg-gray-100" />
+                </div>
+                <div className="space-y-3">
+                  {grouped[letter].map((m) => {
+                    const name = `${m.user.firstName} ${m.user.lastName}`;
+                    const initials = `${m.user.firstName[0]}${m.user.lastName[0]}`.toUpperCase();
+                    return (
+                      <div key={m.id} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-12 h-12 rounded-full ${colors[m.colorIndex % colors.length]} flex items-center justify-center text-white text-sm font-bold flex-shrink-0`}>{initials}</div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="text-sm font-bold text-gray-800">{name}</p>
+                              <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-lg font-semibold flex-shrink-0">{roleLabel[m.role] || m.role}</span>
+                            </div>
+                            <div className="space-y-0.5">
+                              {m.user.email && <p className="text-xs text-gray-400">✉️ {m.user.email}</p>}
+                              {m.user.phone && <p className="text-xs text-gray-400">📞 {m.user.phone}</p>}
+                              {m.user.memberProfile?.currentLocation && <p className="text-xs text-gray-400">📍 {m.user.memberProfile.currentLocation}</p>}
+                              {m.user.memberProfile?.occupation && <p className="text-xs text-gray-400">💼 {m.user.memberProfile.occupation}</p>}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

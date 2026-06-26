@@ -1,11 +1,44 @@
+"use client";
+import { useEffect, useState } from "react";
+
+type User = { firstName: string; lastName: string };
+type Family = { name: string; memberCount: number };
+
 export default function DashboardPage() {
+  const [user, setUser] = useState<User | null>(null);
+  const [family, setFamily] = useState<Family | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const familyId = localStorage.getItem("active_family_id");
+
+    Promise.all([
+      fetch("/api/auth/me").then((r) => r.json()),
+      familyId ? fetch(`/api/families/active?familyId=${familyId}`).then((r) => r.json()) : Promise.resolve(null),
+    ]).then(([userData, familyData]) => {
+      if (userData?.success) setUser(userData.data.user);
+      if (familyData?.success) setFamily(familyData.data.family);
+    }).finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div>
-
       {/* WELCOME */}
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-gray-800">Welcome back, Kelvin 👋</h2>
-        <p className="text-gray-500 text-sm mt-1">Here's what's happening in the Amenumey Family</p>
+        <h2 className="text-2xl font-bold text-gray-800">
+          Welcome back, {user?.firstName ?? "..."} 👋
+        </h2>
+        <p className="text-gray-500 text-sm mt-1">
+          {family ? `Here's what's happening in the ${family.name}` : "Select or create a family to get started"}
+        </p>
       </div>
 
       {/* PROFILE COMPLETION NUDGE */}
@@ -15,19 +48,19 @@ export default function DashboardPage() {
             <p className="font-bold text-base">Complete your family profile 🌳</p>
             <p className="text-indigo-100 text-sm mt-0.5">Help your family know their roots</p>
           </div>
-          <span className="text-3xl font-black">45%</span>
+          <span className="text-3xl font-black">0%</span>
         </div>
         <div className="w-full bg-white/20 rounded-full h-2 mb-4">
-          <div className="bg-white rounded-full h-2" style={{ width: "45%" }} />
+          <div className="bg-white rounded-full h-2 w-0" />
         </div>
         <div className="grid grid-cols-2 gap-2 mb-4">
           {[
-            { label: "Basic Info", done: true },
-            { label: "Profile Photo", done: true },
             { label: "Date of Birth", done: false },
+            { label: "Profile Photo", done: false },
             { label: "Occupation & Location", done: false },
             { label: "Family Relationships", done: false },
             { label: "Biography", done: false },
+            { label: "Message to Family", done: false },
           ].map((item) => (
             <div key={item.label} className="flex items-center gap-2 text-sm">
               <span>{item.done ? "✅" : "⬜"}</span>
@@ -35,131 +68,87 @@ export default function DashboardPage() {
             </div>
           ))}
         </div>
-        <button className="bg-white text-indigo-600 font-bold text-sm px-5 py-2 rounded-xl hover:bg-indigo-50 transition">
+        <a href="/dashboard/tree/build-profile" className="inline-block bg-white text-indigo-600 font-bold text-sm px-5 py-2 rounded-xl hover:bg-indigo-50 transition">
           Complete profile →
-        </button>
+        </a>
       </div>
 
       {/* SUMMARY CARDS */}
       <div className="grid grid-cols-2 gap-4 mb-8 md:grid-cols-4">
         {[
-          { label: "Members", value: "24", sub: "in your family", color: "text-indigo-600", bg: "bg-indigo-50" },
-          { label: "Meetings", value: "2", sub: "upcoming", color: "text-amber-500", bg: "bg-amber-50" },
-          { label: "Dues", value: "3", sub: "active", color: "text-rose-500", bg: "bg-rose-50" },
-          { label: "Events", value: "1", sub: "upcoming", color: "text-green-500", bg: "bg-green-50" },
+          { label: "Members", value: family?.memberCount?.toString() ?? "—", sub: "in your family", color: "text-indigo-600", bg: "bg-indigo-50", href: "/dashboard/members" },
+          { label: "Meetings", value: "—", sub: "upcoming", color: "text-amber-500", bg: "bg-amber-50", href: "/dashboard/meetings" },
+          { label: "Dues", value: "—", sub: "active", color: "text-rose-500", bg: "bg-rose-50", href: "/dashboard/dues" },
+          { label: "Events", value: "—", sub: "upcoming", color: "text-green-500", bg: "bg-green-50", href: "/dashboard/events" },
         ].map((card) => (
-          <div key={card.label} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+          <a key={card.label} href={card.href} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition cursor-pointer block">
             <div className={`w-10 h-10 ${card.bg} rounded-xl flex items-center justify-center mb-3`}>
               <span className={`text-xl font-black ${card.color}`}>{card.value}</span>
             </div>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{card.label}</p>
             <p className="text-xs text-gray-400 mt-0.5">{card.sub}</p>
-          </div>
+          </a>
         ))}
       </div>
 
-      {/* BOTTOM GRID */}
+      {/* INVITE FAMILY MEMBERS CTA */}
+      {family && (
+        <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-gray-800">Invite family members</h3>
+              <p className="text-sm text-gray-500 mt-1">Share the family code so members can join</p>
+              <div className="flex items-center gap-2 mt-3">
+                <span className="font-mono font-black text-lg text-indigo-600 tracking-widest">{family.name.slice(0,3).toUpperCase()}-XXXXX</span>
+                <button
+                  onClick={() => navigator.clipboard?.writeText(family.name)}
+                  className="text-xs text-indigo-600 font-semibold hover:underline"
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+            <div className="text-4xl">🤝</div>
+          </div>
+        </div>
+      )}
+
+      {/* QUICK ACCESS GRID */}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4 mb-8">
+        {[
+          { label: "Family Tree", emoji: "🌳", href: "/dashboard/tree", desc: "View bloodline" },
+          { label: "History", emoji: "📖", href: "/dashboard/history", desc: "Family stories" },
+          { label: "Directory", emoji: "🔍", href: "/dashboard/directory", desc: "Find a member" },
+          { label: "Archive", emoji: "🗂️", href: "/dashboard/archive", desc: "Documents & files" },
+        ].map((item) => (
+          <a key={item.label} href={item.href} className="bg-white border border-gray-100 rounded-2xl p-4 hover:border-indigo-300 hover:shadow-md transition block">
+            <span className="text-2xl block mb-2">{item.emoji}</span>
+            <p className="text-sm font-bold text-gray-800">{item.label}</p>
+            <p className="text-xs text-gray-400">{item.desc}</p>
+          </a>
+        ))}
+      </div>
+
+      {/* EMPTY STATE - no data yet */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-
-        {/* RECENT ANNOUNCEMENTS */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-50">
-            <h3 className="font-bold text-gray-800">Announcements</h3>
-            <a href="/dashboard/announcements" className="text-xs text-indigo-600 font-semibold hover:underline">View all</a>
+        {[
+          { title: "Announcements", href: "/dashboard/announcements", emoji: "📢", cta: "Create first announcement" },
+          { title: "Upcoming Meetings", href: "/dashboard/meetings", emoji: "📅", cta: "Schedule a meeting" },
+          { title: "Active Dues", href: "/dashboard/dues", emoji: "💰", cta: "Create a due" },
+          { title: "Upcoming Events", href: "/dashboard/events", emoji: "🎉", cta: "Create an event" },
+        ].map((widget) => (
+          <div key={widget.title} className="bg-white rounded-2xl border border-gray-100 shadow-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-50">
+              <h3 className="font-bold text-gray-800">{widget.title}</h3>
+              <a href={widget.href} className="text-xs text-indigo-600 font-semibold hover:underline">View all</a>
+            </div>
+            <div className="px-6 py-8 text-center">
+              <span className="text-3xl block mb-3">{widget.emoji}</span>
+              <p className="text-sm text-gray-400 mb-3">Nothing here yet</p>
+              <a href={widget.href} className="text-xs text-indigo-600 font-semibold hover:underline">{widget.cta} →</a>
+            </div>
           </div>
-          <div className="divide-y divide-gray-50">
-            {[
-              { title: "Family reunion scheduled for August", time: "2h ago", author: "Uncle Kofi" },
-              { title: "Monthly dues reminder — June", time: "1d ago", author: "Treasurer Ama" },
-              { title: "New member joined: Martha Dapaah", time: "3d ago", author: "Secretary" },
-            ].map((item) => (
-              <div key={item.title} className="px-6 py-4">
-                <p className="text-sm font-semibold text-gray-800">{item.title}</p>
-                <p className="text-xs text-gray-400 mt-0.5">by {item.author} · {item.time}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* UPCOMING MEETINGS */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-50">
-            <h3 className="font-bold text-gray-800">Upcoming Meetings</h3>
-            <a href="/dashboard/meetings" className="text-xs text-indigo-600 font-semibold hover:underline">View all</a>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {[
-              { title: "Monthly Family Meeting", date: "Sat, 14 Jun 2025", type: "Physical", location: "Uncle Kofi's house" },
-              { title: "Emergency Dues Discussion", date: "Sun, 22 Jun 2025", type: "Virtual", location: "Google Meet" },
-            ].map((item) => (
-              <div key={item.title} className="px-6 py-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-800">{item.title}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{item.date} · {item.location}</p>
-                  </div>
-                  <span className={`text-xs font-semibold px-2 py-1 rounded-lg ${item.type === "Virtual" ? "bg-indigo-50 text-indigo-600" : "bg-green-50 text-green-600"}`}>
-                    {item.type}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ACTIVE DUES */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-50">
-            <h3 className="font-bold text-gray-800">Active Dues</h3>
-            <a href="/dashboard/dues" className="text-xs text-indigo-600 font-semibold hover:underline">View all</a>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {[
-              { title: "Monthly Dues — June", amount: "GHS 50", status: "Pending", deadline: "30 Jun" },
-              { title: "Building Fund", amount: "GHS 200", status: "Paid", deadline: "15 Jun" },
-              { title: "Funeral Contribution", amount: "GHS 100", status: "Partial", deadline: "10 Jun" },
-            ].map((item) => (
-              <div key={item.title} className="px-6 py-4 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-gray-800">{item.title}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{item.amount} · Due {item.deadline}</p>
-                </div>
-                <span className={`text-xs font-semibold px-2 py-1 rounded-lg ${
-                  item.status === "Paid" ? "bg-green-50 text-green-600" :
-                  item.status === "Partial" ? "bg-amber-50 text-amber-600" :
-                  "bg-rose-50 text-rose-600"
-                }`}>
-                  {item.status}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* UPCOMING EVENTS */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-50">
-            <h3 className="font-bold text-gray-800">Upcoming Events</h3>
-            <a href="/dashboard/events" className="text-xs text-indigo-600 font-semibold hover:underline">View all</a>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {[
-              { title: "Amenumey Family Reunion", date: "Sat, 2 Aug 2025", type: "Reunion" },
-              { title: "Grandma Ama's 80th Birthday", date: "Sun, 20 Jul 2025", type: "Birthday" },
-            ].map((item) => (
-              <div key={item.title} className="px-6 py-4 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-gray-800">{item.title}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{item.date}</p>
-                </div>
-                <span className="text-xs font-semibold px-2 py-1 rounded-lg bg-purple-50 text-purple-600">
-                  {item.type}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
+        ))}
       </div>
     </div>
   );

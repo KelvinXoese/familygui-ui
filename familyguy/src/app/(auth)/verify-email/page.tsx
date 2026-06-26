@@ -1,36 +1,51 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 export default function VerifyEmailPage() {
   const router = useRouter();
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [email, setEmail] = useState("");
+  const [countdown, setCountdown] = useState(0);
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
     const pendingEmail = localStorage.getItem("pending_email");
     if (pendingEmail) setEmail(pendingEmail);
   }, []);
 
+  useEffect(() => {
+    if (countdown > 0) {
+      const t = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(t);
+    }
+  }, [countdown]);
+
   const handleChange = (index: number, value: string) => {
-    if (value.length > 1) return;
+    if (!/^\d*$/.test(value)) return;
+    if (value.length > 1) {
+      // Handle paste
+      const digits = value.replace(/\D/g, "").slice(0, 6).split("");
+      const newOtp = [...otp];
+      digits.forEach((d, i) => { if (index + i < 6) newOtp[index + i] = d; });
+      setOtp(newOtp);
+      const nextIndex = Math.min(index + digits.length, 5);
+      inputRefs.current[nextIndex]?.focus();
+      return;
+    }
     const newOtp = [...otp];
     newOtp[index] = value;
     setOtp(newOtp);
-
-    // Auto focus next input
-    if (value && index < 5) {
-      const next = document.getElementById(`otp-${index + 1}`);
-      next?.focus();
-    }
+    if (value && index < 5) inputRefs.current[index + 1]?.focus();
   };
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
     if (e.key === "Backspace" && !otp[index] && index > 0) {
-      const prev = document.getElementById(`otp-${index - 1}`);
-      prev?.focus();
+      inputRefs.current[index - 1]?.focus();
     }
   };
 
@@ -38,13 +53,9 @@ export default function VerifyEmailPage() {
     e.preventDefault();
     setError("");
     const code = otp.join("");
-    if (code.length !== 6) {
-      setError("Please enter the complete 6-digit code");
-      return;
-    }
+    if (code.length !== 6) { setError("Please enter the complete 6-digit code"); return; }
 
     setLoading(true);
-
     try {
       const userId = localStorage.getItem("pending_user_id");
       const res = await fetch("/api/auth/verify-otp", {
@@ -52,13 +63,8 @@ export default function VerifyEmailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, code }),
       });
-
       const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || "Invalid code");
-        return;
-      }
+      if (!res.ok) { setError(data.error || "Invalid code"); return; }
 
       localStorage.removeItem("pending_user_id");
       localStorage.removeItem("pending_email");
@@ -67,6 +73,31 @@ export default function VerifyEmailPage() {
       setError("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    const userId = localStorage.getItem("pending_user_id");
+    if (!userId) return;
+    setResending(true);
+    setError("");
+    setSuccess("");
+    try {
+      const res = await fetch("/api/auth/resend-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "Failed to resend"); return; }
+      setSuccess("A new code has been sent to your email.");
+      setOtp(["", "", "", "", "", ""]);
+      inputRefs.current[0]?.focus();
+      setCountdown(60);
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setResending(false);
     }
   };
 
@@ -82,7 +113,7 @@ export default function VerifyEmailPage() {
           <h2 className="text-xl font-bold text-gray-800">Verify your email</h2>
           <p className="text-gray-500 text-sm mt-2">
             We sent a 6-digit code to<br />
-            <span className="font-semibold text-gray-700">{email}</span>
+            <span className="font-semibold text-gray-700">{email || "your email"}</span>
           </p>
         </div>
 
@@ -91,16 +122,22 @@ export default function VerifyEmailPage() {
             {error}
           </div>
         )}
+        {success && (
+          <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-xl mb-4 text-center">
+            {success}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           <div className="flex gap-2 justify-center mb-6">
             {otp.map((digit, index) => (
               <input
                 key={index}
+                ref={(el) => { inputRefs.current[index] = el; }}
                 id={`otp-${index}`}
                 type="text"
                 inputMode="numeric"
-                maxLength={1}
+                maxLength={6}
                 value={digit}
                 onChange={(e) => handleChange(index, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(index, e)}
@@ -120,7 +157,22 @@ export default function VerifyEmailPage() {
 
         <p className="text-center text-sm text-gray-500 mt-6">
           Didn't receive a code?{" "}
-          <button className="text-indigo-600 font-semibold hover:underline">Resend code</button>
+          {countdown > 0 ? (
+            <span className="text-gray-400">Resend in {countdown}s</span>
+          ) : (
+            <button
+              onClick={handleResend}
+              disabled={resending}
+              className="text-indigo-600 font-semibold hover:underline disabled:opacity-50"
+            >
+              {resending ? "Sending..." : "Resend code"}
+            </button>
+          )}
+        </p>
+
+        <p className="text-center text-xs text-gray-400 mt-3">
+          Wrong email?{" "}
+          <a href="/register" className="text-indigo-600 font-semibold hover:underline">Go back</a>
         </p>
 
       </div>
