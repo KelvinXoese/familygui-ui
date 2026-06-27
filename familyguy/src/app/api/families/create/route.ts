@@ -54,10 +54,7 @@ export async function POST(request: Request) {
 
     return successResponse({ family }, 201);
   } catch (error) {
-  console.error("Create family error:", JSON.stringify(error, null, 2));
-  if (error instanceof Error) {
-    console.error("Message:", error.message);
+    console.error("Create family error:", error instanceof Error ? error.message : error);
+    return errorResponse("Something went wrong", 500);
   }
-  return errorResponse("Something went wrong", 500);
-}
 }
