@@ -17,17 +17,15 @@ export async function POST(request: Request) {
     const body = await request.json();
     const validation = createFamilySchema.safeParse(body);
     if (!validation.success) {
-      return errorResponse(validation.error.errors[0].message, 400);
+      return errorResponse(validation.error?.errors?.[0]?.message ?? "Invalid input", 400);
     }
 
     const { name, description, motto, origin } = validation.data;
 
-    // Generate unique invite code
     let inviteCode = generateInviteCode(name);
     const existing = await prisma.family.findUnique({ where: { inviteCode } });
     if (existing) inviteCode = generateInviteCode(name + Date.now());
 
-    // Create family and add creator as Family Head
     const family = await prisma.$transaction(async (tx) => {
       const newFamily = await tx.family.create({
         data: {
