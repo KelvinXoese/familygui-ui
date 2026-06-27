@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyToken } from "@/lib/auth";
 
 const publicRoutes = [
   "/",
@@ -21,8 +20,9 @@ const publicRoutes = [
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  const isPublic =
-    publicRoutes.some((route) => pathname === route || pathname.startsWith(route + "/"));
+  const isPublic = publicRoutes.some(
+    (route) => pathname === route || pathname.startsWith(route + "/")
+  );
   if (isPublic) return NextResponse.next();
 
   const token = request.cookies.get("access_token")?.value;
@@ -30,14 +30,9 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  const payload = verifyToken(token);
-  if (!payload) {
-    return NextResponse.redirect(new URL("/login", request.url));
-  }
-
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)" ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
