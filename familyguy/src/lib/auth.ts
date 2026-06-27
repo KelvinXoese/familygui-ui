@@ -15,7 +15,7 @@ export async function verifyPassword(
 }
 
 export function generateAccessToken(userId: string): string {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: "15m" });
+  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: "7d" });
 }
 
 export function generateRefreshToken(userId: string): string {
