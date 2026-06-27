@@ -56,7 +56,7 @@ export async function POST(request: Request) {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 15 * 60,
+      maxAge: 60 * 60 * 24,
     });
     cookieStore.set("refresh_token", refreshToken, {
       httpOnly: true,
