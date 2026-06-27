@@ -17,6 +17,7 @@ export default function CreateFamilyPage() {
       const res = await fetch("/api/families/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(form),
       });
       console.log("Response status:", res.status);
