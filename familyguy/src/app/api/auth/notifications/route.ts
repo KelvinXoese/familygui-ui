@@ -10,11 +10,7 @@ export async function GET() {
     if (!token) return errorResponse("Unauthorized", 401);
     const payload = verifyToken(token);
     if (!payload) return errorResponse("Unauthorized", 401);
-    const notifications = await prisma.notification.findMany({
-      where: { userId: payload.userId },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-    });
+    const notifications = await prisma.notification.findMany({ where: { userId: payload.userId }, orderBy: { createdAt: "desc" }, take: 50 });
     return successResponse({ notifications });
-  } catch (e) { console.error(e); return errorResponse("Something went wrong", 500); }
+  } catch (e) { return errorResponse("Something went wrong", 500); }
 }

@@ -6,7 +6,6 @@ datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
-  
 }
 
 // ============================================
@@ -19,12 +18,10 @@ enum AuthProvider {
   APPLE
 }
 
-enum FamilyMemberRole {
-  FAMILY_HEAD
-  ELDER
-  TREASURER
-  SECRETARY
-  MEMBER
+enum GroupType {
+  FAMILY
+  GROUP
+  ORGANIZATION
 }
 
 enum MemberStatus {
@@ -79,6 +76,11 @@ enum EventType {
   BIRTHDAY
   FUNERAL
   GATHERING
+  WEDDING
+  NAMING_CEREMONY
+  MEETING
+  CONFERENCE
+  PARTY
   OTHER
 }
 
@@ -109,6 +111,8 @@ enum NotificationType {
   ANNOUNCEMENT
   PROFILE_NUDGE
   TREE_NUDGE
+  MEMBER_JOINED
+  MEMBER_REMOVED
   GENERAL
 }
 
@@ -121,6 +125,14 @@ enum OtpType {
 enum ParentStatus {
   LIVING
   DECEASED
+}
+
+enum PostReactionType {
+  LIKE
+  LOVE
+  HAHA
+  WOW
+  SAD
 }
 
 // ============================================
@@ -144,8 +156,8 @@ model User {
   updatedAt     DateTime     @updatedAt
 
   // Relations
-  familyMembers        FamilyMember[]
-  familiesCreated      Family[]              @relation("FamilyCreator")
+  groupMembers         GroupMember[]
+  groupsCreated        Group[]               @relation("GroupCreator")
   memberProfile        MemberProfile?
   treeProfiles         FamilyTreeProfile[]
   treeChildren         FamilyTreeChild[]     @relation("ParentUser")
@@ -166,7 +178,11 @@ model User {
   otpCodes             OtpCode[]
   sessions             Session[]
   refreshTokens        RefreshToken[]
-  invitedMembers       FamilyMember[]        @relation("MemberInviter")
+  invitedMembers       GroupMember[]         @relation("MemberInviter")
+  posts                Post[]
+  postReactions        PostReaction[]
+  postComments         PostComment[]
+  commentReplies       CommentReply[]
 
   @@index([email])
   @@index([phone])
@@ -221,55 +237,83 @@ model OtpCode {
 }
 
 // ============================================
-// FAMILY CORE
+// UNIFIED GROUP (Family | Group | Organization)
 // ============================================
 
-model Family {
-  id            String   @id @default(cuid())
+model Group {
+  id            String    @id @default(cuid())
+  type          GroupType @default(FAMILY)
   name          String
   description   String?
   motto         String?
   origin        String?
   coverPhotoUrl String?
-  inviteCode    String   @unique
+  avatarUrl     String?
+  inviteCode    String    @unique
   createdById   String
+  isDeleted     Boolean   @default(false)
   deletedAt     DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  createdBy        User                @relation("FamilyCreator", fields: [createdById], references: [id])
-  members          FamilyMember[]
+  createdBy        User                @relation("GroupCreator", fields: [createdById], references: [id])
+  members          GroupMember[]
   treeProfiles     FamilyTreeProfile[]
   treeChildren     FamilyTreeChild[]
+  hierarchyNodes   HierarchyNode[]
   announcements    Announcement[]
   meetings         Meeting[]
   dues             Due[]
   events           Event[]
   archiveDocuments ArchiveDocument[]
   notifications    Notification[]
+  posts            Post[]
 
   @@index([inviteCode])
-  @@map("families")
+  @@index([type])
+  @@map("groups")
 }
 
-model FamilyMember {
-  id         String           @id @default(cuid())
-  familyId   String
-  userId     String
-  role       FamilyMemberRole @default(MEMBER)
-  status     MemberStatus     @default(ACTIVE)
-  joinedAt   DateTime         @default(now())
+model GroupMember {
+  id          String       @id @default(cuid())
+  groupId     String
+  userId      String
+  role        String       @default("MEMBER")
+  status      MemberStatus @default(ACTIVE)
+  joinedAt    DateTime     @default(now())
   invitedById String?
-  deletedAt  DateTime?
+  deletedAt   DateTime?
 
-  family    Family  @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  invitedBy User?   @relation("MemberInviter", fields: [invitedById], references: [id])
+  group     Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy User?  @relation("MemberInviter", fields: [invitedById], references: [id])
 
-  @@unique([familyId, userId])
-  @@index([familyId])
+  @@unique([groupId, userId])
+  @@index([groupId])
   @@index([userId])
-  @@map("family_members")
+  @@map("group_members")
+}
+
+// ============================================
+// HIERARCHY / STRUCTURE TREE
+// ============================================
+
+model HierarchyNode {
+  id          String   @id @default(cuid())
+  groupId     String
+  title       String
+  description String?
+  parentId    String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  group    Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  parent   HierarchyNode? @relation("NodeChildren", fields: [parentId], references: [id])
+  children HierarchyNode[] @relation("NodeChildren")
+
+  @@index([groupId])
+  @@map("hierarchy_nodes")
 }
 
 // ============================================
@@ -308,7 +352,7 @@ model MemberProfile {
 model FamilyTreeProfile {
   id             String       @id @default(cuid())
   userId         String
-  familyId       String
+  groupId        String
   parentUserId   String?
   parentName     String?
   parentStatus   ParentStatus?
@@ -317,12 +361,12 @@ model FamilyTreeProfile {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, familyId])
+  @@unique([userId, groupId])
   @@index([userId])
-  @@index([familyId])
+  @@index([groupId])
   @@map("family_tree_profiles")
 }
 
@@ -331,18 +375,89 @@ model FamilyTreeChild {
   parentUserId  String
   childUserId   String?
   childName     String?
-  familyId      String
+  groupId       String
   isConfirmed   Boolean  @default(false)
   deletedAt     DateTime?
   createdAt     DateTime @default(now())
 
-  parentUser User    @relation("ParentUser", fields: [parentUserId], references: [id], onDelete: Cascade)
-  childUser  User?   @relation("ChildUser", fields: [childUserId], references: [id])
-  family     Family  @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  parentUser User  @relation("ParentUser", fields: [parentUserId], references: [id], onDelete: Cascade)
+  childUser  User? @relation("ChildUser", fields: [childUserId], references: [id])
+  group      Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@index([parentUserId])
-  @@index([familyId])
+  @@index([groupId])
   @@map("family_tree_children")
+}
+
+// ============================================
+// POSTS (Photo/text posts with reactions)
+// ============================================
+
+model Post {
+  id        String   @id @default(cuid())
+  groupId   String
+  authorId  String
+  caption   String?
+  imageUrl  String?
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  group     Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  author    User           @relation(fields: [authorId], references: [id])
+  reactions PostReaction[]
+  comments  PostComment[]
+
+  @@index([groupId])
+  @@index([authorId])
+  @@map("posts")
+}
+
+model PostReaction {
+  id        String          @id @default(cuid())
+  postId    String
+  userId    String
+  type      PostReactionType @default(LIKE)
+  createdAt DateTime        @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@map("post_reactions")
+}
+
+model PostComment {
+  id        String   @id @default(cuid())
+  postId    String
+  authorId  String
+  body      String
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  post    Post           @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author  User           @relation(fields: [authorId], references: [id])
+  replies CommentReply[]
+
+  @@index([postId])
+  @@map("post_comments")
+}
+
+model CommentReply {
+  id        String   @id @default(cuid())
+  commentId String
+  authorId  String
+  body      String
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+
+  comment PostComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  author  User        @relation(fields: [authorId], references: [id])
+
+  @@index([commentId])
+  @@map("comment_replies")
 }
 
 // ============================================
@@ -351,7 +466,7 @@ model FamilyTreeChild {
 
 model Announcement {
   id        String   @id @default(cuid())
-  familyId  String
+  groupId   String
   authorId  String
   title     String
   body      String
@@ -360,12 +475,12 @@ model Announcement {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  family   Family                 @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  author   User                   @relation(fields: [authorId], references: [id])
+  group     Group                  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  author    User                   @relation(fields: [authorId], references: [id])
   reactions AnnouncementReaction[]
   comments  AnnouncementComment[]
 
-  @@index([familyId])
+  @@index([groupId])
   @@index([authorId])
   @@map("announcements")
 }
@@ -407,7 +522,7 @@ model AnnouncementComment {
 
 model Meeting {
   id          String        @id @default(cuid())
-  familyId    String
+  groupId     String
   createdById String
   title       String
   date        DateTime
@@ -422,11 +537,11 @@ model Meeting {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  family     Family              @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  createdBy  User                @relation("MeetingCreator", fields: [createdById], references: [id])
+  group       Group               @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdBy   User                @relation("MeetingCreator", fields: [createdById], references: [id])
   attendances MeetingAttendance[]
 
-  @@index([familyId])
+  @@index([groupId])
   @@map("meetings")
 }
 
@@ -451,7 +566,7 @@ model MeetingAttendance {
 
 model Due {
   id          String    @id @default(cuid())
-  familyId    String
+  groupId     String
   createdById String
   title       String
   description String?
@@ -464,11 +579,11 @@ model Due {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  family    Family       @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  group     Group        @relation(fields: [groupId], references: [id], onDelete: Cascade)
   createdBy User         @relation("DueCreator", fields: [createdById], references: [id])
   payments  DuePayment[]
 
-  @@index([familyId])
+  @@index([groupId])
   @@map("dues")
 }
 
@@ -502,7 +617,7 @@ model DuePayment {
 
 model Event {
   id          String      @id @default(cuid())
-  familyId    String
+  groupId     String
   createdById String
   title       String
   description String?
@@ -515,12 +630,12 @@ model Event {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
-  family      Family            @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  group       Group             @relation(fields: [groupId], references: [id], onDelete: Cascade)
   createdBy   User              @relation("EventCreator", fields: [createdById], references: [id])
   attendances EventAttendance[]
   gallery     EventGallery[]
 
-  @@index([familyId])
+  @@index([groupId])
   @@map("events")
 }
 
@@ -540,14 +655,14 @@ model EventAttendance {
 }
 
 model EventGallery {
-  id          String   @id @default(cuid())
-  eventId     String
+  id           String   @id @default(cuid())
+  eventId      String
   uploadedById String
-  fileUrl     String
-  fileType    String
-  caption     String?
-  deletedAt   DateTime?
-  uploadedAt  DateTime @default(now())
+  fileUrl      String
+  fileType     String
+  caption      String?
+  deletedAt    DateTime?
+  uploadedAt   DateTime @default(now())
 
   event      Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
   uploadedBy User  @relation(fields: [uploadedById], references: [id])
@@ -561,21 +676,21 @@ model EventGallery {
 // ============================================
 
 model ArchiveDocument {
-  id          String   @id @default(cuid())
-  familyId    String
+  id           String   @id @default(cuid())
+  groupId      String
   uploadedById String
-  title       String
-  fileUrl     String
-  fileType    FileType
-  fileSize    String?
-  year        Int
-  deletedAt   DateTime?
-  createdAt   DateTime @default(now())
+  title        String
+  fileUrl      String
+  fileType     FileType
+  fileSize     String?
+  year         Int
+  deletedAt    DateTime?
+  createdAt    DateTime @default(now())
 
-  family     Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  uploadedBy User   @relation(fields: [uploadedById], references: [id])
+  group      Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  uploadedBy User  @relation(fields: [uploadedById], references: [id])
 
-  @@index([familyId])
+  @@index([groupId])
   @@map("archive_documents")
 }
 
@@ -586,7 +701,7 @@ model ArchiveDocument {
 model Notification {
   id        String           @id @default(cuid())
   userId    String
-  familyId  String?
+  groupId   String?
   title     String
   body      String
   type      NotificationType
@@ -594,8 +709,8 @@ model Notification {
   link      String?
   createdAt DateTime         @default(now())
 
-  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  family Family? @relation(fields: [familyId], references: [id])
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group? @relation(fields: [groupId], references: [id])
 
   @@index([userId, isRead])
   @@index([userId])

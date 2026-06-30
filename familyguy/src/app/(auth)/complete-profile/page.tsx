@@ -18,6 +18,7 @@ export default function CompleteProfilePage() {
       const res = await fetch("/api/auth/complete-profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ dateOfBirth }),
       });
       const data = await res.json();

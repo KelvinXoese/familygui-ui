@@ -11,6 +11,6 @@ export async function POST() {
     const payload = verifyToken(token);
     if (!payload) return errorResponse("Unauthorized", 401);
     await prisma.notification.updateMany({ where: { userId: payload.userId, isRead: false }, data: { isRead: true } });
-    return successResponse({ message: "All marked read" });
-  } catch (e) { console.error(e); return errorResponse("Something went wrong", 500); }
+    return successResponse({ message: "ok" });
+  } catch (e) { return errorResponse("Something went wrong", 500); }
 }

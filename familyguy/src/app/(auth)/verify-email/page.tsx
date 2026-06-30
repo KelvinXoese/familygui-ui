@@ -61,6 +61,7 @@ export default function VerifyEmailPage() {
       const res = await fetch("/api/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ userId, code }),
       });
       const data = await res.json();
@@ -86,6 +87,7 @@ export default function VerifyEmailPage() {
       const res = await fetch("/api/auth/resend-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ userId }),
       });
       const data = await res.json();
