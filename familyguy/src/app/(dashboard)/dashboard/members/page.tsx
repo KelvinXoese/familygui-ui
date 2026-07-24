@@ -17,14 +17,12 @@ export default function MembersPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showInvite, setShowInvite] = useState(false);
-  const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [showRemoveModal, setShowRemoveModal] = useState<Member | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     const groupId = localStorage.getItem("active_group_id");
     if (!groupId) { setLoading(false); return; }
-
     Promise.all([
       fetch(`/api/groups/active?groupId=${groupId}`, { credentials: "include" }).then((r) => r.json()),
       fetch(`/api/groups/members?groupId=${groupId}`, { credentials: "include" }).then((r) => r.json()),
@@ -35,19 +33,6 @@ export default function MembersPage() {
       if (userData.success) setMyUserId(userData.data.user.id);
     }).finally(() => setLoading(false));
   }, []);
-
-  const handleLeave = async () => {
-    setActionLoading(true);
-    const groupId = localStorage.getItem("active_group_id");
-    await fetch("/api/groups/leave", {
-      method: "POST", credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ groupId }),
-    });
-    localStorage.removeItem("active_group_id");
-    localStorage.removeItem("active_group_type");
-    window.location.href = "/onboarding";
-  };
 
   const handleRemove = async (member: Member) => {
     setActionLoading(true);
@@ -64,7 +49,9 @@ export default function MembersPage() {
 
   const leaderRoles = ["FAMILY_HEAD", "LEADER", "ADMIN", "SECRETARY"];
   const isLeader = leaderRoles.includes(myRole);
-  const filtered = members.filter((m) => `${m.user.firstName} ${m.user.lastName}`.toLowerCase().includes(search.toLowerCase()));
+  const filtered = members.filter((m) =>
+    `${m.user.firstName} ${m.user.lastName}`.toLowerCase().includes(search.toLowerCase())
+  );
   const typeLabel = group?.type === "FAMILY" ? "family" : group?.type === "ORGANIZATION" ? "organization" : "group";
 
   return (
@@ -74,14 +61,9 @@ export default function MembersPage() {
           <h2 className="text-2xl font-bold text-gray-800">Members</h2>
           <p className="text-gray-500 text-sm mt-1">{members.length} member{members.length !== 1 ? "s" : ""}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setShowLeaveModal(true)} className="px-4 py-2.5 border border-rose-200 text-rose-500 text-sm font-semibold rounded-xl hover:bg-rose-50 transition">
-            Leave
-          </button>
-          <button onClick={() => setShowInvite(!showInvite)} className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition">
-            + Invite
-          </button>
-        </div>
+        <button onClick={() => setShowInvite(!showInvite)} className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition">
+          + Invite
+        </button>
       </div>
 
       {/* Invite panel */}
@@ -95,14 +77,14 @@ export default function MembersPage() {
                 <p className="text-xs text-gray-400 font-semibold">Invite code</p>
                 <p className="font-mono font-black text-xl text-indigo-600 tracking-widest">{group.inviteCode}</p>
               </div>
-              <button onClick={() => navigator.clipboard?.writeText(group.inviteCode)} className="px-3 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-700 transition flex-shrink-0">Copy</button>
+              <button onClick={() => navigator.clipboard?.writeText(group.inviteCode)} className="px-3 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-700 transition">Copy</button>
             </div>
             <div className="bg-white rounded-xl p-3 flex items-center justify-between gap-3 border border-indigo-100">
               <div className="min-w-0">
                 <p className="text-xs text-gray-400 font-semibold mb-0.5">Invite link</p>
                 <p className="font-mono text-xs text-indigo-600 truncate">{typeof window !== "undefined" ? `${window.location.origin}/join/${group.inviteCode}` : ""}</p>
               </div>
-              <button onClick={() => navigator.clipboard?.writeText(`${window.location.origin}/join/${group.inviteCode}`)} className="px-3 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-700 transition flex-shrink-0">Copy</button>
+              <button onClick={() => navigator.clipboard?.writeText(`${window.location.origin}/join/${group.inviteCode}`)} className="px-3 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-700 transition">Copy</button>
             </div>
           </div>
         </div>
@@ -117,6 +99,12 @@ export default function MembersPage() {
 
       {loading ? (
         <div className="flex items-center justify-center h-48"><div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" /></div>
+      ) : filtered.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center shadow-sm">
+          <span className="text-4xl block mb-4">👥</span>
+          <h3 className="text-lg font-bold text-gray-700 mb-2">{search ? "No results" : "No members yet"}</h3>
+          <p className="text-sm text-gray-400">{search ? "Try a different search" : "Invite members using the button above"}</p>
+        </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {filtered.map((member, i) => {
@@ -128,9 +116,9 @@ export default function MembersPage() {
                 <div className="flex items-start gap-3">
                   <div className={`w-11 h-11 rounded-full ${colors[i % colors.length]} flex items-center justify-center text-white text-sm font-bold flex-shrink-0`}>{initials}</div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-bold text-gray-800 truncate">{name}{isMe && <span className="text-xs text-gray-400 font-normal"> (you)</span>}</p>
-                    </div>
+                    <p className="text-sm font-bold text-gray-800 truncate">
+                      {name} {isMe && <span className="text-xs text-gray-400 font-normal">(you)</span>}
+                    </p>
                     <span className="inline-block text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg mt-0.5">{member.role.replace(/_/g, " ")}</span>
                     <p className="text-xs text-gray-400 mt-1">{member.user.email}</p>
                     {member.user.memberProfile?.currentLocation && <p className="text-xs text-gray-400">📍 {member.user.memberProfile.currentLocation}</p>}
@@ -147,45 +135,23 @@ export default function MembersPage() {
         </div>
       )}
 
-      {/* LEAVE MODAL */}
-      {showLeaveModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center px-4 pb-6 md:pb-0">
-          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
-            <div className="text-center mb-5">
-              <span className="text-4xl block mb-3">👋</span>
-              <h3 className="text-lg font-bold text-gray-800">Leave {group?.name}?</h3>
-              <p className="text-sm text-gray-500 mt-2">
-                You'll lose access to all the content in this {typeLabel}. You can rejoin later with an invite code.
-              </p>
-            </div>
-            <div className="space-y-3">
-              <button onClick={handleLeave} disabled={actionLoading} className="w-full py-3 bg-rose-500 hover:bg-rose-600 disabled:opacity-60 text-white font-bold rounded-xl transition text-sm">
-                {actionLoading ? "Leaving..." : `Yes, leave ${group?.name}`}
-              </button>
-              <button onClick={() => setShowLeaveModal(false)} className="w-full py-3 bg-gray-50 hover:bg-gray-100 text-gray-600 font-semibold rounded-xl transition text-sm">
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* REMOVE MEMBER MODAL */}
       {showRemoveModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center px-4 pb-6 md:pb-0">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
-            <div className="text-center mb-5">
+            <div className="text-center mb-6">
               <span className="text-4xl block mb-3">🚪</span>
               <h3 className="text-lg font-bold text-gray-800">Remove {showRemoveModal.user.firstName}?</h3>
               <p className="text-sm text-gray-500 mt-2">
-                {showRemoveModal.user.firstName} {showRemoveModal.user.lastName} will be removed from {group?.name}. They can rejoin with an invite code.
+                <span className="font-semibold">{showRemoveModal.user.firstName} {showRemoveModal.user.lastName}</span> will be removed from {group?.name}. They can rejoin with an invite code.
               </p>
             </div>
             <div className="space-y-3">
-              <button onClick={() => handleRemove(showRemoveModal)} disabled={actionLoading} className="w-full py-3 bg-rose-500 hover:bg-rose-600 disabled:opacity-60 text-white font-bold rounded-xl transition text-sm">
-                {actionLoading ? "Removing..." : `Remove ${showRemoveModal.user.firstName}`}
+              <button onClick={() => handleRemove(showRemoveModal)} disabled={actionLoading}
+                className="w-full py-3.5 bg-rose-500 hover:bg-rose-600 disabled:opacity-60 text-white font-bold rounded-xl transition">
+                {actionLoading ? "Removing..." : `Yes, remove ${showRemoveModal.user.firstName}`}
               </button>
-              <button onClick={() => setShowRemoveModal(null)} className="w-full py-3 bg-gray-50 hover:bg-gray-100 text-gray-600 font-semibold rounded-xl transition text-sm">
+              <button onClick={() => setShowRemoveModal(null)} className="w-full py-3.5 bg-gray-50 hover:bg-gray-100 text-gray-600 font-semibold rounded-xl transition">
                 Cancel
               </button>
             </div>

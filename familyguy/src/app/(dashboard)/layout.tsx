@@ -21,10 +21,8 @@ const getNavItems = (type: string) => {
     { label: "Dues & Contributions", emoji: "💰", href: "/dashboard/dues" },
     { label: "Events", emoji: "🎉", href: "/dashboard/events" },
   ];
-
   if (type === "FAMILY") {
-    return [
-      ...base,
+    return [...base,
       { label: "Family Tree", emoji: "🌳", href: "/dashboard/tree" },
       { label: "Family History", emoji: "📖", href: "/dashboard/history" },
       { label: "Directory", emoji: "🔍", href: "/dashboard/directory" },
@@ -34,17 +32,14 @@ const getNavItems = (type: string) => {
     ];
   }
   if (type === "ORGANIZATION") {
-    return [
-      ...base,
+    return [...base,
       { label: "Org Structure", emoji: "🏗️", href: "/dashboard/structure" },
       { label: "Directory", emoji: "🔍", href: "/dashboard/directory" },
       { label: "Archive", emoji: "🗂️", href: "/dashboard/archive" },
       { label: "Notifications", emoji: "🔔", href: "/dashboard/notifications" },
     ];
   }
-  // GROUP
-  return [
-    ...base,
+  return [...base,
     { label: "Group Structure", emoji: "🏗️", href: "/dashboard/structure" },
     { label: "Directory", emoji: "🔍", href: "/dashboard/directory" },
     { label: "Archive", emoji: "🗂️", href: "/dashboard/archive" },
@@ -58,20 +53,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [user, setUser] = useState<User | null>(null);
   const [group, setGroup] = useState<Group | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [leaveLoading, setLeaveLoading] = useState(false);
+
   const groupType = (group?.type || "FAMILY") as keyof typeof typeConfig;
   const tc = typeConfig[groupType];
   const navItems = getNavItems(group?.type || "FAMILY");
+  const typeLabel = group?.type === "FAMILY" ? "Family" : group?.type === "ORGANIZATION" ? "Organization" : "Group";
 
   useEffect(() => {
     fetch("/api/auth/me", { credentials: "include" })
-      .then((r) => r.json())
-      .then((d) => { if (d.success) setUser(d.data.user); });
-
+      .then((r) => r.json()).then((d) => { if (d.success) setUser(d.data.user); });
     const groupId = localStorage.getItem("active_group_id");
     if (groupId) {
       fetch(`/api/groups/active?groupId=${groupId}`, { credentials: "include" })
-        .then((r) => r.json())
-        .then((d) => { if (d.success) setGroup(d.data.group); });
+        .then((r) => r.json()).then((d) => { if (d.success) setGroup(d.data.group); });
     }
   }, []);
 
@@ -80,6 +77,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     localStorage.removeItem("active_group_id");
     localStorage.removeItem("active_group_type");
     router.push("/login");
+  };
+
+  const handleLeave = async () => {
+    setLeaveLoading(true);
+    const groupId = localStorage.getItem("active_group_id");
+    await fetch("/api/groups/leave", {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ groupId }),
+    });
+    localStorage.removeItem("active_group_id");
+    localStorage.removeItem("active_group_type");
+    window.location.href = "/onboarding";
   };
 
   const initials = user ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase() : "..";
@@ -110,7 +120,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Switch group */}
       <div className="px-3 pt-3">
-        <button onClick={() => router.push("/onboarding")} className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition">
+        <button onClick={() => router.push("/onboarding")}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition">
           <span>⇄</span> Switch group
         </button>
       </div>
@@ -128,18 +139,48 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         ))}
       </nav>
 
-      {/* User */}
-      <div className="px-4 py-4 border-t border-gray-100">
-        <div className="flex items-center gap-3">
+      {/* User section — no arrow, click avatar to open menu */}
+      <div className="px-4 py-4 border-t border-gray-100 relative">
+        <button
+          onClick={() => setUserMenuOpen(!userMenuOpen)}
+          className="w-full flex items-center gap-3 rounded-xl hover:bg-gray-50 p-2 -mx-2 transition"
+        >
           <div className="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
             {initials}
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 text-left">
             <p className="text-sm font-semibold text-gray-700 truncate">{user ? `${user.firstName} ${user.lastName}` : "..."}</p>
             <p className="text-xs text-gray-400 truncate">{group?.myRole?.replace(/_/g, " ") || "Member"}</p>
           </div>
-          <button onClick={handleLogout} title="Sign out" className="text-gray-300 hover:text-rose-400 transition text-lg">↩</button>
-        </div>
+          <span className="text-gray-300 text-xs">▲</span>
+        </button>
+
+        {/* User menu dropdown (opens upward) */}
+        {userMenuOpen && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setUserMenuOpen(false)} />
+            <div className="absolute bottom-full left-4 right-4 mb-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-20">
+              <div className="px-4 py-3 border-b border-gray-50">
+                <p className="text-sm font-bold text-gray-800">{user?.firstName} {user?.lastName}</p>
+                <p className="text-xs text-gray-400 truncate">{user?.email}</p>
+              </div>
+              <div className="p-2 space-y-1">
+                <button
+                  onClick={() => { setUserMenuOpen(false); setShowLeaveModal(true); }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-rose-500 hover:bg-rose-50 transition text-left"
+                >
+                  🚪 Leave {group?.name || typeLabel}
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 transition text-left"
+                >
+                  🔓 Sign out
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </aside>
   );
@@ -168,6 +209,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
         <main className="px-6 py-8 md:px-8">{children}</main>
       </div>
+
+      {/* LEAVE MODAL */}
+      {showLeaveModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center px-4 pb-6 md:pb-0">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+            <div className="text-center mb-6">
+              <span className="text-5xl block mb-4">🚪</span>
+              <h3 className="text-xl font-bold text-gray-800">
+                Leave {group?.name}?
+              </h3>
+              <p className="text-sm text-gray-500 mt-2">
+                Are you sure you want to leave <span className="font-semibold">{group?.name}</span>? You will lose access to all content. You can always rejoin later with an invite code.
+              </p>
+            </div>
+            <div className="space-y-3">
+              <button
+                onClick={handleLeave}
+                disabled={leaveLoading}
+                className="w-full py-3.5 bg-rose-500 hover:bg-rose-600 disabled:opacity-60 text-white font-bold rounded-xl transition"
+              >
+                {leaveLoading ? "Leaving..." : `Yes, leave ${group?.name}`}
+              </button>
+              <button
+                onClick={() => setShowLeaveModal(false)}
+                className="w-full py-3.5 bg-gray-50 hover:bg-gray-100 text-gray-600 font-semibold rounded-xl transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
